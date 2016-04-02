@@ -1,0 +1,5 @@
+.vs
+*.csv
+*.sbc
+*.sbs
+*.pyc
