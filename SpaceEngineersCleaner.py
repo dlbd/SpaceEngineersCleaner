@@ -19,13 +19,15 @@ cubeblock_xpath_template = cubeblock_xpath + '[@xsi:type="%s"]'
 battery_xpath = cubeblock_xpath_template % 'MyObjectBuilder_BatteryBlock'
 reactor_xpath = cubeblock_xpath_template % 'MyObjectBuilder_Reactor'
 projector_xpath = cubeblock_xpath_template % 'MyObjectBuilder_Projector'
+timer_xpath = cubeblock_xpath_template % 'MyObjectBuilder_TimerBlock'
+enabled_timer_xpath = timer_xpath + "[Enabled='true']"
 
 cubegrid_start_xml = '<MyObjectBuilder_EntityBase xsi:type="MyObjectBuilder_CubeGrid">'
 cubegrid_end_xml = '</MyObjectBuilder_EntityBase>'
 entity_id_xml = '<EntityId>%d</EntityId>'
 
 class CubeGrid(object):
-    def __init__(self, id, name, owner_ids, owner_names, block_count, battery_count, stored_power, reactor_count, reactor_uranium_amount, projector_count, projected_blocks, part_of_something, block_types):
+    def __init__(self, id, name, owner_ids, owner_names, block_count, battery_count, stored_power, reactor_count, reactor_uranium_amount, projector_count, projected_blocks, timer_count, enabled_timer_count, part_of_something, block_types):
         self.id = id
         self.name = name
         self.owner_ids = owner_ids
@@ -37,6 +39,8 @@ class CubeGrid(object):
         self.reactor_uranium_amount = reactor_uranium_amount
         self.projector_count = projector_count
         self.projected_blocks = projected_blocks
+        self.timer_count = timer_count
+        self.enabled_timer_count = enabled_timer_count
         self.part_of_something = part_of_something
         self.block_types = block_types
 
@@ -113,6 +117,8 @@ def get_cubegrids(sbc_tree, sbs_tree):
         batteries = entity.findall(battery_xpath, namespaces)
         reactors = entity.findall(reactor_xpath, namespaces)
         projectors = entity.findall(projector_xpath, namespaces)
+        timers = entity.findall(timer_xpath, namespaces)
+        enabled_timers = entity.findall(enabled_timer_xpath, namespaces)
 
         block_types = get_block_types(all_blocks)
         used_part_types = [block_type for block_type in block_types if block_type in part_types]
@@ -129,6 +135,7 @@ def get_cubegrids(sbc_tree, sbs_tree):
             id, name, owner_ids, owner_names, len(all_blocks), \
             len(batteries), stored_power, len(reactors), reactor_uranium_amount, \
             len(projectors), projected_block_count, \
+            len(timers), len(enabled_timers), \
             len(used_part_types) > 0, block_types))
 
     return cubegrids
@@ -232,7 +239,7 @@ def write_csv(cubegrids, filename):
     with open(filename, 'wb') as csvfile:
         writer = csv.writer(csvfile, delimiter=delimiter)
         
-        writer.writerow(['Name', 'Owner Names', 'Block Count', 'Battery Count', 'Stored Power', 'Reactor Count', 'Reactor Uranium Amount', 'Projectors', 'Projected Block Count', 'Block Types'])
+        writer.writerow(['Name', 'Owners', 'Blocks', 'Batteries', 'Stored Power', 'Reactors', 'Reactor Uranium Amount', 'Projectors', 'Projected Blocks', 'Timers', 'Enabled Timers', 'Block Types'])
 
         for grid in cubegrids:
             writer.writerow([
@@ -245,6 +252,8 @@ def write_csv(cubegrids, filename):
                 locale.format("%g", grid.reactor_uranium_amount),
                 grid.projector_count,
                 grid.projected_blocks,
+                grid.timer_count,
+                grid.enabled_timer_count,
                 grid.block_types])
 
 if __name__ == '__main__':
