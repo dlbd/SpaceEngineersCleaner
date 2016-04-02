@@ -236,7 +236,7 @@ def write_csv(cubegrids, filename):
 
         for grid in cubegrids:
             writer.writerow([
-                grid.name,
+                grid.name.encode('ascii', 'replace'),
                 ', '.join([name.encode('ascii', 'replace') for name in grid.owner_names]),
                 grid.block_count,
                 grid.battery_count,
