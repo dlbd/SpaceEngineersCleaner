@@ -269,9 +269,9 @@ def get_argument_parser():
     parser = argparse.ArgumentParser(description="Space Engineers save file cleaner.")
 
     parser.add_argument('--csv-directory', type=str, default='.', help="the directory to place .csv files in")
-    parser.add_argument('--delete-after-days', type=int, default=30, help="after how many days to delete all grids belonging to the player")
-    parser.add_argument('--delete-trash', type=bool, default=True, help="whether to delete small grids with no ownable blocks")
-    parser.add_argument('--delete-respawn-ships', type=bool, default=False, help="whether to delete respawn ships")
+    parser.add_argument('--delete-after-days', type=int, default=30, help="after how many days to delete all grids belonging to the player (0 to never delete)")
+    parser.add_argument('--delete-trash', action='store_true', help="whether to delete small grids with no ownable blocks")
+    parser.add_argument('--delete-respawn-ships', action='store_true', help="whether to delete respawn ships")
     parser.add_argument('--keep-player-names', nargs='*', type=str, default=[], help="player names whose grids are always kept")
     parser.add_argument('--log-directory', type=str, default='logs/', help=r"the directory containing the .log files (typically, %%APPDATA%%/SpaceEngineersDedicated)")
     parser.add_argument('--sbc-in', type=str, default='Sandbox.sbc', help="the Sandbox.sbc file to be read")
@@ -284,9 +284,13 @@ def run():
     arg_parser = get_argument_parser()
     args = arg_parser.parse_args()
 
-    print "Parsing the logs..."
-    player_seen = get_player_seen_dict(args.log_directory)
-    delete_player_names = get_player_names_for_deletion(player_seen, args.delete_after_days, args.keep_player_names)
+    if args.delete_after_days != 0:
+        print "Parsing the logs..."
+        player_seen = get_player_seen_dict(args.log_directory)
+        delete_player_names = get_player_names_for_deletion(player_seen, args.delete_after_days, args.keep_player_names)
+    else:
+        delete_player_names = []
+
     print "Parsing the .sbc file..."
     sbc_tree = etree.parse(args.sbc_in)
     print "Parsing the .sbs file... This might take a while."
