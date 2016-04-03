@@ -12,6 +12,8 @@ type_attrib = '{http://www.w3.org/2001/XMLSchema-instance}type'
 
 part_types = ['MyObjectBuilder_Wheel', 'MyObjectBuilder_PistonTop', 'MyObjectBuilder_MotorRotor', 'MyObjectBuilder_MotorAdvancedRotor']
 
+types_to_disable = ['MyObjectBuilder_Drill', 'MyObjectBuilder_OreDetector', 'MyObjectBuilder_Projector', 'MyObjectBuilder_TimerBlock', 'MyObjectBuilder_ShipGrinder', 'MyObjectBuilder_ShipWelder']
+
 respawn_ship_names = ['Atmospheric Lander mk.1', 'RespawnShip', 'RespawnShip2']
 
 entity_xpath_template = './SectorObjects/MyObjectBuilder_EntityBase[@xsi:type="%s"]'
@@ -28,6 +30,12 @@ enabled_timer_xpath = timer_xpath + "[Enabled='true']"
 cubegrid_start_xml = '<MyObjectBuilder_EntityBase xsi:type="MyObjectBuilder_CubeGrid">'
 cubegrid_end_xml = '</MyObjectBuilder_EntityBase>'
 entity_id_xml = '<EntityId>%d</EntityId>'
+
+block_start_xml = '<MyObjectBuilder_CubeBlock '
+block_end_xml = '</MyObjectBuilder_CubeBlock>'
+block_type_xml = 'xsi:type="%s"'
+enabled_xml = '\n          <Enabled>true</Enabled>'
+disabled_xml = '\n          <Enabled>false</Enabled>'
 
 class CubeGrid(object):
     def __init__(self, id, name, owner_ids, owner_names, block_count, battery_count, stored_power, reactor_count, reactor_uranium_amount, projector_count, projected_blocks, timer_count, enabled_timer_count, part_of_something, block_types, deletion_reasons=[]):
@@ -180,47 +188,61 @@ def get_cubegrids_to_delete(cubegrids, delete_trash, delete_respawn_ships, delet
 
     return to_delete
 
-def delete_cubegrids(file_in, file_out, cubegrids_to_delete):
+def make_replacements(content, start_substr, end_substr, content_matcher, content_changer, include_surrounding_whitespace=True):
+    next_pos = 0
+
+    while True:
+        start_pos = content.find(start_substr, next_pos)
+        if start_pos == -1:
+            break # no more matching substrings
+
+        while include_surrounding_whitespace and content[start_pos - 1] in [' ', '\t']:
+            start_pos -= 1
+
+        next_pos = content.find(end_substr, start_pos)
+        if next_pos == -1:
+            break # invalid XML?
+
+        next_pos = next_pos + len(end_substr)
+
+        while include_surrounding_whitespace and content[next_pos] in ['\r', '\n']:
+            next_pos += 1
+
+        matched = content_matcher(content, start_pos, next_pos)
+
+        if not matched:
+            continue
+
+        content = content_changer(content, start_pos, next_pos)
+        next_pos = start_pos
+
+    return content
+
+def clean_up(file_in, file_out, cubegrids_to_delete, disable_nonessential_blocks=True):
     # not parsing the file as XML to preserve whitespace, encoding and namespaces,
     # so that the file can be easily diff'ed and because SE might not load it otherwise
-
-    ids_to_delete =  [cubegrid.id for cubegrid in cubegrids_to_delete]
-    entity_id_xmls_to_delete = [entity_id_xml % id for id in ids_to_delete]
 
     with open(file_in, 'rb') as f:
         content = f.read()
 
     next_pos = 0
 
-    while True:
-        grid_start_pos = content.find(cubegrid_start_xml, next_pos)
-        if grid_start_pos == -1:
-            break # no more cubegrids?
+    # delete specified grids
 
-        while content[grid_start_pos - 1] in [' ', '\t']:
-            grid_start_pos -= 1
+    ids_to_delete =  [cubegrid.id for cubegrid in cubegrids_to_delete]
+    entity_id_xmls_to_delete = [entity_id_xml % id for id in ids_to_delete]
 
-        grid_end_pos = content.find(cubegrid_end_xml, grid_start_pos)
-        if grid_end_pos == -1:
-            break # invalid XML?
+    content = make_replacements(content, cubegrid_start_xml, cubegrid_end_xml, \
+       lambda text, start_pos, next_pos: any((text.find(xml, start_pos, next_pos) != -1 for xml in entity_id_xmls_to_delete)), \
+       lambda text, start_pos, next_pos: text[:start_pos] + text[next_pos:])
 
-        next_pos = grid_end_pos + len(cubegrid_end_xml)
+    # disable certain blocks
+    
+    type_xmls_to_disable = [block_type_xml % type for type in types_to_disable]
 
-        while content[next_pos] in ['\r', '\n']:
-            next_pos += 1
-
-        delete = False
-
-        for xml in entity_id_xmls_to_delete:
-            if content.find(xml, grid_start_pos, next_pos) != -1:
-                delete = True
-                break
-
-        if not delete:
-            continue
-
-        content = content[:grid_start_pos] + content[next_pos:]
-        next_pos = grid_start_pos
+    content = make_replacements(content, block_start_xml, block_end_xml, \
+       lambda text, start_pos, next_pos: text.find(enabled_xml, start_pos, next_pos) != -1 and any((text.find(xml, start_pos, next_pos) != -1 for xml in type_xmls_to_disable)), \
+       lambda text, start_pos, next_pos: text[:start_pos] + text[start_pos:next_pos].replace(enabled_xml, disabled_xml, 1) + text[next_pos:])
 
     with open(file_out, 'wb') as f:
         f.write(content)
@@ -308,7 +330,7 @@ def run():
     getpass('')
 
     print "Writing the cleaned-up .sbs file..."
-    delete_cubegrids(args.sbs_in, args.sbs_out, cubegrids_to_delete)
+    clean_up(args.sbs_in, args.sbs_out, cubegrids_to_delete)
     print "Done writing."
 
 def get_delimiter():
