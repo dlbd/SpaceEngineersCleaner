@@ -1,5 +1,6 @@
 .vs
 *.csv
+*.log
+*.pyc
 *.sbc
 *.sbs
-*.pyc

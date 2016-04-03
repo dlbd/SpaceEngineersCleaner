@@ -1,7 +1,10 @@
-import csv
-import locale
+import argparse, csv, locale, os, re
 import xml.etree.ElementTree as etree
+from datetime import datetime
 from getpass import getpass # for the continue/abort prompt
+from os import path
+
+player_log_patterns = ['^((?:[^-]|-[^ ])+) -.*World request received: (.*)$', '^((?:[^-]|-[^ ])+) -.User left (.*)$']
 
 namespaces = { 'xsi': 'http://www.w3.org/2001/XMLSchema-instance' }
 
@@ -140,7 +143,7 @@ def get_cubegrids(sbc_tree, sbs_tree):
 
     return cubegrids
 
-def get_cubegrids_to_delete(cubegrids, delete_trash, delete_respawn_ships):
+def get_cubegrids_to_delete(cubegrids, delete_trash, delete_respawn_ships, delete_player_names):
     to_delete = set()
 
     if delete_trash:
@@ -163,6 +166,13 @@ def get_cubegrids_to_delete(cubegrids, delete_trash, delete_respawn_ships):
         for cubegrid in cubegrids:
             if cubegrid.name in respawn_ship_names:
                 to_delete.add(cubegrid)
+
+    for cubegrid in cubegrids:
+        if len(cubegrid.owner_names) == 0:
+            continue
+
+        if all([owner_name in delete_player_names for owner_name in cubegrid.owner_names]):
+            to_delete.add(cubegrid)
 
     return to_delete
 
@@ -211,33 +221,104 @@ def delete_cubegrids(file_in, file_out, cubegrids_to_delete):
     with open(file_out, 'wb') as f:
         f.write(content)
 
+def get_player_seen_dict(log_dir):
+    log_files = sorted([log_dir + '/' + file for file in os.listdir(log_dir) if path.splitext(file)[1] == '.log'])
+
+    log_file_index = 0
+    player_seen = dict()
+
+    for log_file in log_files:
+        print "Parsing log file %d out of %d" % (log_file_index, len(log_files))
+        
+        with open(log_file) as f:
+            for line in f.readlines():
+                for pattern in player_log_patterns:
+                    match = re.match(pattern, line)
+
+                    if match is None:
+                        continue
+
+                    date_str = match.group(1)
+                    player = match.group(2)
+
+                    player_seen[player] = datetime.strptime(date_str, '%Y-%m-%d %H:%M:%S.%f')
+
+        log_file_index += 1
+
+    return player_seen
+
+def get_player_names_for_deletion(player_seen, delete_after_days, keep_players=[]):
+    delete_player_names = set()
+
+    for (name, last_seen) in player_seen.items():
+        if name in keep_players:
+            continue
+
+        timedelta = datetime.now() - last_seen
+        
+        if timedelta.days > delete_after_days:
+            delete_player_names.add(name)
+
+    return delete_player_names
+
+def get_argument_parser():
+    parser = argparse.ArgumentParser(description="Space Engineers save file cleaner.")
+
+    parser.add_argument('--csv-directory', type=str, default='.', help="the directory to place .csv files in")
+    parser.add_argument('--delete-after-days', type=int, default=30, help="after how many days to delete all grids belonging to the player")
+    parser.add_argument('--delete-trash', type=bool, default=True, help="whether to delete small grids with no ownable blocks")
+    parser.add_argument('--delete-respawn-ships', type=bool, default=False, help="whether to delete respawn ships")
+    parser.add_argument('--keep-player-names', nargs='*', type=str, default=[], help="player names whose grids are always kept")
+    parser.add_argument('--log-directory', type=str, default='logs/', help="the directory containing the .log files (typically, %APPDATA%/SpaceEngineersDedicated)")
+    parser.add_argument('--sbc-in', type=str, default='Sandbox.sbc', help="the Sandbox.sbc file to be read")
+    parser.add_argument('--sbs-in', type=str, default='SANDBOX_0_0_0_.sbs', help="the SANDBOX_0_0_0_.sbs to be read")
+    parser.add_argument('--sbs-out', type=str, default='SANDBOX_0_0_0_.cleanedup.sbs', help="the SANDBOX_0_0_0_.sbs to be written")
+
+    return parser
+
 def run():
+    arg_parser = get_argument_parser()
+    args = arg_parser.parse_args()
+
+    print "Parsing the logs..."
+    player_seen = get_player_seen_dict(args.log_directory)
+    delete_player_names = get_player_names_for_deletion(player_seen, args.delete_after_days, args.keep_player_names)
     print "Parsing the .sbc file..."
-    sbc_tree = etree.parse('Sandbox.sbc')
+    sbc_tree = etree.parse(args.sbc_in)
     print "Parsing the .sbs file... This might take a while."
-    sbs_tree = etree.parse('SANDBOX_0_0_0_.sbs')
+    sbs_tree = etree.parse(args.sbs_in)
     print "Done parsing."
 
     cubegrids = get_cubegrids(sbc_tree, sbs_tree)
-    cubegrids_to_delete = get_cubegrids_to_delete(cubegrids, True, True)
+    cubegrids_to_delete = get_cubegrids_to_delete(cubegrids, args.delete_trash, args.delete_respawn_ships, delete_player_names)
 
-    write_csv(cubegrids, 'grids.csv')
-    write_csv(cubegrids_to_delete, 'grids-delete.csv')
+    write_player_seen_csv(player_seen, args.csv_directory + '/players.csv')
+    write_cubegrid_csv(cubegrids, args.csv_directory + '/grids.csv')
+    write_cubegrid_csv(cubegrids_to_delete, args.csv_directory + '/grids-delete.csv')
 
     print "Please review the .csv files. Then press Enter to clean-up or Ctrl-C to abort."
     getpass('')
 
     print "Writing the cleaned-up .sbs file..."
-    delete_cubegrids('SANDBOX_0_0_0_.sbs', 'SANDBOX_0_0_0_.cleanedup.sbs', cubegrids_to_delete)
+    delete_cubegrids(args.sbs_in, args.sbs_out, cubegrids_to_delete)
     print "Done writing."
 
-def write_csv(cubegrids, filename):
+def get_delimiter():
     locale.setlocale(locale.LC_ALL, "")
+    return ';' if locale.localeconv()['decimal_point'] == ',' else '.'
 
-    delimiter = ';' if locale.localeconv()['decimal_point'] == ',' else '.'
-
+def write_player_seen_csv(player_seen, filename):
     with open(filename, 'wb') as csvfile:
-        writer = csv.writer(csvfile, delimiter=delimiter)
+        writer = csv.writer(csvfile, delimiter=get_delimiter())
+
+        writer.writerow(['Name', 'Last Seen'])
+
+        for (name, last_seen) in player_seen.iteritems():
+            writer.writerow([name, last_seen])
+
+def write_cubegrid_csv(cubegrids, filename):
+    with open(filename, 'wb') as csvfile:
+        writer = csv.writer(csvfile, delimiter=get_delimiter())
         
         writer.writerow(['Name', 'Owners', 'Blocks', 'Batteries', 'Stored Power', 'Reactors', 'Reactor Uranium Amount', 'Projectors', 'Projected Blocks', 'Timers', 'Enabled Timers', 'Block Types'])
 
