@@ -30,7 +30,7 @@ cubegrid_end_xml = '</MyObjectBuilder_EntityBase>'
 entity_id_xml = '<EntityId>%d</EntityId>'
 
 class CubeGrid(object):
-    def __init__(self, id, name, owner_ids, owner_names, block_count, battery_count, stored_power, reactor_count, reactor_uranium_amount, projector_count, projected_blocks, timer_count, enabled_timer_count, part_of_something, block_types):
+    def __init__(self, id, name, owner_ids, owner_names, block_count, battery_count, stored_power, reactor_count, reactor_uranium_amount, projector_count, projected_blocks, timer_count, enabled_timer_count, part_of_something, block_types, deletion_reasons=[]):
         self.id = id
         self.name = name
         self.owner_ids = owner_ids
@@ -46,6 +46,7 @@ class CubeGrid(object):
         self.enabled_timer_count = enabled_timer_count
         self.part_of_something = part_of_something
         self.block_types = block_types
+        self.deletion_reasons = list(deletion_reasons)
 
 def get_player_name_dict(root):
     id_to_name = {}
@@ -160,11 +161,13 @@ def get_cubegrids_to_delete(cubegrids, delete_trash, delete_respawn_ships, delet
             if cubegrid.block_count > 50:
                 continue;
 
+            cubegrid.deletion_reasons.append("Trash")
             to_delete.add(cubegrid)
 
     if delete_respawn_ships:
         for cubegrid in cubegrids:
             if cubegrid.name in respawn_ship_names:
+                cubegrid.deletion_reasons.append("Respawn Ship")
                 to_delete.add(cubegrid)
 
     for cubegrid in cubegrids:
@@ -172,6 +175,7 @@ def get_cubegrids_to_delete(cubegrids, delete_trash, delete_respawn_ships, delet
             continue
 
         if all([owner_name in delete_player_names for owner_name in cubegrid.owner_names]):
+            cubegrid.deletion_reasons.append("Inactive Owners")
             to_delete.add(cubegrid)
 
     return to_delete
@@ -320,7 +324,7 @@ def write_cubegrid_csv(cubegrids, filename):
     with open(filename, 'wb') as csvfile:
         writer = csv.writer(csvfile, delimiter=get_delimiter())
         
-        writer.writerow(['Name', 'Owners', 'Blocks', 'Batteries', 'Stored Power', 'Reactors', 'Reactor Uranium Amount', 'Projectors', 'Projected Blocks', 'Timers', 'Enabled Timers', 'Block Types'])
+        writer.writerow(['Name', 'Owners', 'Blocks', 'Batteries', 'Stored Power', 'Reactors', 'Reactor Uranium Amount', 'Projectors', 'Projected Blocks', 'Timers', 'Enabled Timers', 'Block Types', 'Deletion Reasons'])
 
         for grid in cubegrids:
             writer.writerow([
@@ -335,7 +339,8 @@ def write_cubegrid_csv(cubegrids, filename):
                 grid.projected_blocks,
                 grid.timer_count,
                 grid.enabled_timer_count,
-                grid.block_types])
+                grid.block_types,
+                ', '.join(grid.deletion_reasons)])
 
 if __name__ == '__main__':
     run()
