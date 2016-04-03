@@ -269,7 +269,7 @@ def get_argument_parser():
     parser.add_argument('--delete-trash', type=bool, default=True, help="whether to delete small grids with no ownable blocks")
     parser.add_argument('--delete-respawn-ships', type=bool, default=False, help="whether to delete respawn ships")
     parser.add_argument('--keep-player-names', nargs='*', type=str, default=[], help="player names whose grids are always kept")
-    parser.add_argument('--log-directory', type=str, default='logs/', help="the directory containing the .log files (typically, %APPDATA%/SpaceEngineersDedicated)")
+    parser.add_argument('--log-directory', type=str, default='logs/', help=r"the directory containing the .log files (typically, %%APPDATA%%/SpaceEngineersDedicated)")
     parser.add_argument('--sbc-in', type=str, default='Sandbox.sbc', help="the Sandbox.sbc file to be read")
     parser.add_argument('--sbs-in', type=str, default='SANDBOX_0_0_0_.sbs', help="the SANDBOX_0_0_0_.sbs to be read")
     parser.add_argument('--sbs-out', type=str, default='SANDBOX_0_0_0_.cleanedup.sbs', help="the SANDBOX_0_0_0_.sbs to be written")
