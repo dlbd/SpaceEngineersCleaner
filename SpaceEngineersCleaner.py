@@ -180,7 +180,7 @@ def get_cubegrids_to_delete(cubegrids, delete_trash, delete_respawn_ships, are_a
                 cubegrid.deletion_reasons.append("Respawn Ship")
                 to_delete.add(cubegrid)
 
-    # delete grids of inactive owners and of owner with no med rooms
+    # delete grids of inactive owners, of owners with no med rooms and of owners having only a respawn ship
     for cubegrid in cubegrids:
         if len(cubegrid.owner_names) == 0:
             continue
@@ -194,6 +194,10 @@ def get_cubegrids_to_delete(cubegrids, delete_trash, delete_respawn_ships, are_a
 
         if all_players_have_no_powered_medrooms(cubegrids, cubegrid.owner_names):
             cubegrid.deletion_reasons.append("Dead-ish Owners")
+            to_delete.add(cubegrid)
+
+        if all_players_have_only_respawn_ships(cubegrids, cubegrid.owner_names):
+            cubegrid.deletion_reasons.append("Respawn-Ship Only Owners")
             to_delete.add(cubegrid)
 
     return to_delete
@@ -297,8 +301,14 @@ def player_has_a_powered_medroom(cubegrids, name):
 
     return False
 
+def player_has_only_respawn_ship(cubegrids, name):
+    return all((name not in cubegrid.owner_names or cubegrid.name in respawn_ship_names for cubegrid in cubegrids))
+
 def all_players_have_no_powered_medrooms(cubegrids, names):
     return not all((player_has_a_powered_medroom(cubegrids, name) for name in names))
+
+def all_players_have_only_respawn_ships(cubegrids, names):
+    return all((player_has_only_respawn_ship(cubegrids, name) for name in names))
 
 def get_argument_parser():
     parser = argparse.ArgumentParser(description="Space Engineers save file cleaner.")
