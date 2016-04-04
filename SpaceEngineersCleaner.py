@@ -152,7 +152,7 @@ def get_cubegrids(sbc_tree, sbs_tree):
 
     return cubegrids
 
-def get_cubegrids_to_delete(cubegrids, delete_trash, delete_respawn_ships, delete_player_names):
+def get_cubegrids_to_delete(cubegrids, delete_trash, delete_respawn_ships, is_player_active):
     to_delete = set()
 
     if delete_trash:
@@ -182,7 +182,7 @@ def get_cubegrids_to_delete(cubegrids, delete_trash, delete_respawn_ships, delet
         if len(cubegrid.owner_names) == 0:
             continue
 
-        if all([owner_name in delete_player_names for owner_name in cubegrid.owner_names]):
+        if all([not is_player_active(owner_name) for owner_name in cubegrid.owner_names]):
             cubegrid.deletion_reasons.append("Inactive Owners")
             to_delete.add(cubegrid)
 
@@ -254,6 +254,7 @@ def get_player_seen_dict(log_dir):
     player_seen = dict()
 
     for log_file in log_files:
+        log_file_index += 1
         print "Parsing log file %d out of %d" % (log_file_index, len(log_files))
         
         with open(log_file) as f:
@@ -269,23 +270,7 @@ def get_player_seen_dict(log_dir):
 
                     player_seen[player] = datetime.strptime(date_str, '%Y-%m-%d %H:%M:%S.%f')
 
-        log_file_index += 1
-
     return player_seen
-
-def get_player_names_for_deletion(player_seen, delete_after_days, keep_players=[]):
-    delete_player_names = set()
-
-    for (name, last_seen) in player_seen.items():
-        if name in keep_players:
-            continue
-
-        timedelta = datetime.now() - last_seen
-        
-        if timedelta.days > delete_after_days:
-            delete_player_names.add(name)
-
-    return delete_player_names
 
 def get_argument_parser():
     parser = argparse.ArgumentParser(description="Space Engineers save file cleaner.")
@@ -308,10 +293,13 @@ def run():
 
     if args.delete_after_days != 0:
         print "Parsing the logs..."
+        
         player_seen = get_player_seen_dict(args.log_directory)
-        delete_player_names = get_player_names_for_deletion(player_seen, args.delete_after_days, args.keep_player_names)
+        write_player_seen_csv(player_seen, args.csv_directory + '/players.csv')
+
+        is_player_active = lambda name: name in args.keep_player_names or (name in player_seen and (datetime.now() - player_seen[name]).days <= args.delete_after_days)
     else:
-        delete_player_names = []
+        is_player_active = lambda name: True
 
     print "Parsing the .sbc file..."
     sbc_tree = etree.parse(args.sbc_in)
@@ -320,9 +308,8 @@ def run():
     print "Done parsing."
 
     cubegrids = get_cubegrids(sbc_tree, sbs_tree)
-    cubegrids_to_delete = get_cubegrids_to_delete(cubegrids, args.delete_trash, args.delete_respawn_ships, delete_player_names)
+    cubegrids_to_delete = get_cubegrids_to_delete(cubegrids, args.delete_trash, args.delete_respawn_ships, is_player_active)
 
-    write_player_seen_csv(player_seen, args.csv_directory + '/players.csv')
     write_cubegrid_csv(cubegrids, args.csv_directory + '/grids.csv')
     write_cubegrid_csv(cubegrids_to_delete, args.csv_directory + '/grids-delete.csv')
 
@@ -365,7 +352,7 @@ def write_cubegrid_csv(cubegrids, filename):
                 grid.projected_blocks,
                 grid.timer_count,
                 grid.enabled_timer_count,
-                grid.block_types,
+                ', '.join([block_type.replace('MyObjectBuilder_', '') for block_type in grid.block_types]),
                 ', '.join(grid.deletion_reasons)])
 
 if __name__ == '__main__':
