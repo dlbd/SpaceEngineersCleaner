@@ -152,9 +152,10 @@ def get_cubegrids(sbc_tree, sbs_tree):
 
     return cubegrids
 
-def get_cubegrids_to_delete(cubegrids, delete_trash, delete_respawn_ships, is_player_active):
+def get_cubegrids_to_delete(cubegrids, delete_trash, delete_respawn_ships, are_all_players_deletable, are_all_players_inactive):
     to_delete = set()
 
+    # delete trash
     if delete_trash:
         for cubegrid in cubegrids:
             # skip grids that are probably a part of something (wheels, rotors, pistons)
@@ -172,18 +173,27 @@ def get_cubegrids_to_delete(cubegrids, delete_trash, delete_respawn_ships, is_pl
             cubegrid.deletion_reasons.append("Trash")
             to_delete.add(cubegrid)
 
+    # delete respawn ships
     if delete_respawn_ships:
         for cubegrid in cubegrids:
             if cubegrid.name in respawn_ship_names:
                 cubegrid.deletion_reasons.append("Respawn Ship")
                 to_delete.add(cubegrid)
 
+    # delete grids of inactive owners and of owner with no med rooms
     for cubegrid in cubegrids:
         if len(cubegrid.owner_names) == 0:
             continue
 
-        if all([not is_player_active(owner_name) for owner_name in cubegrid.owner_names]):
+        if not are_all_players_deletable(cubegrid.owner_names):
+            continue
+
+        if are_all_players_inactive(cubegrid.owner_names):
             cubegrid.deletion_reasons.append("Inactive Owners")
+            to_delete.add(cubegrid)
+
+        if all_players_have_no_powered_medrooms(cubegrids, cubegrid.owner_names):
+            cubegrid.deletion_reasons.append("Dead-ish Owners")
             to_delete.add(cubegrid)
 
     return to_delete
@@ -272,6 +282,24 @@ def get_player_seen_dict(log_dir):
 
     return player_seen
 
+def player_has_a_powered_medroom(cubegrids, name):
+    for cubegrid in cubegrids:
+        if cubegrid.stored_power == 0 and cubegrid.reactor_uranium_amount == 0:
+            continue
+
+        if not 'MyObjectBuilder_MedicalRoom' in cubegrid.block_types:
+            continue
+
+        if not name in cubegrid.owner_names:
+            continue
+
+        return True
+
+    return False
+
+def all_players_have_no_powered_medrooms(cubegrids, names):
+    return not all((player_has_a_powered_medroom(cubegrids, name) for name in names))
+
 def get_argument_parser():
     parser = argparse.ArgumentParser(description="Space Engineers save file cleaner.")
 
@@ -297,9 +325,12 @@ def run():
         player_seen = get_player_seen_dict(args.log_directory)
         write_player_seen_csv(player_seen, args.csv_directory + '/players.csv')
 
-        is_player_active = lambda name: name in args.keep_player_names or (name in player_seen and (datetime.now() - player_seen[name]).days <= args.delete_after_days)
+        is_player_active = lambda name: name in player_seen and (datetime.now() - player_seen[name]).days <= args.delete_after_days
     else:
         is_player_active = lambda name: True
+
+    are_all_players_inactive = lambda player_names: all([not is_player_active(player_name) for player_name in player_names])
+    are_all_players_deletable = lambda player_names: not any([player_name in args.keep_player_names for player_name in player_names])
 
     print "Parsing the .sbc file..."
     sbc_tree = etree.parse(args.sbc_in)
@@ -308,10 +339,14 @@ def run():
     print "Done parsing."
 
     cubegrids = get_cubegrids(sbc_tree, sbs_tree)
-    cubegrids_to_delete = get_cubegrids_to_delete(cubegrids, args.delete_trash, args.delete_respawn_ships, is_player_active)
+    cubegrids_to_delete = get_cubegrids_to_delete(cubegrids, args.delete_trash, args.delete_respawn_ships, are_all_players_deletable, are_all_players_inactive)
 
     write_cubegrid_csv(cubegrids, args.csv_directory + '/grids.csv')
     write_cubegrid_csv(cubegrids_to_delete, args.csv_directory + '/grids-delete.csv')
+
+    if len(cubegrids_to_delete) == 0:
+        print "There is nothing to delete."
+        return
 
     print "Please review the .csv files. Then press Enter to clean-up or Ctrl-C to abort."
     getpass('')
