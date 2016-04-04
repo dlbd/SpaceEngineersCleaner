@@ -1,10 +1,10 @@
-import argparse, csv, locale, os, re
+import argparse, codecs, csv, locale, os, re
 import xml.etree.ElementTree as etree
 from datetime import datetime
 from getpass import getpass # for the continue/abort prompt
 from os import path
 
-player_log_patterns = ['^((?:[^-]|-[^ ])+) -.*World request received: (.*)$', '^((?:[^-]|-[^ ])+) -.User left (.*)$']
+player_log_patterns = ['^((?:[^-]|-[^ ])+) -.*World request received: ([^\r]*)(?:\r?)$', '^((?:[^-]|-[^ ])+) -.User left ([^\r]*)(?:\r?)$'] # $ matches only the \n part of the \r\n in Unicode strings
 
 namespaces = { 'xsi': 'http://www.w3.org/2001/XMLSchema-instance' }
 
@@ -271,7 +271,7 @@ def get_player_seen_dict(log_dir):
         log_file_index += 1
         print "Parsing log file %d out of %d" % (log_file_index, len(log_files))
         
-        with open(log_file) as f:
+        with codecs.open(log_file, encoding='utf-8') as f:
             for line in f.readlines():
                 for pattern in player_log_patterns:
                     match = re.match(pattern, line)
@@ -305,7 +305,7 @@ def player_has_only_respawn_ship(cubegrids, name):
     return all((name not in cubegrid.owner_names or cubegrid.name in respawn_ship_names for cubegrid in cubegrids))
 
 def all_players_have_no_powered_medrooms(cubegrids, names):
-    return not all((player_has_a_powered_medroom(cubegrids, name) for name in names))
+    return all((not player_has_a_powered_medroom(cubegrids, name) for name in names))
 
 def all_players_have_only_respawn_ships(cubegrids, names):
     return all((player_has_only_respawn_ship(cubegrids, name) for name in names))
@@ -376,7 +376,7 @@ def write_player_seen_csv(player_seen, filename):
         writer.writerow(['Name', 'Last Seen'])
 
         for (name, last_seen) in player_seen.iteritems():
-            writer.writerow([name, last_seen])
+            writer.writerow([name.encode('utf-8'), last_seen])
 
 def write_cubegrid_csv(cubegrids, filename):
     with open(filename, 'wb') as csvfile:
@@ -386,8 +386,8 @@ def write_cubegrid_csv(cubegrids, filename):
 
         for grid in cubegrids:
             writer.writerow([
-                grid.name.encode('ascii', 'replace'),
-                ', '.join([name.encode('ascii', 'replace') for name in grid.owner_names]),
+                grid.name.encode('utf-8'),
+                ', '.join([name.encode('utf-8') for name in grid.owner_names]),
                 grid.block_count,
                 grid.battery_count,
                 locale.format("%g", grid.stored_power),
