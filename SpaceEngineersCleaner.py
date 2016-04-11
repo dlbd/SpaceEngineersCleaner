@@ -15,7 +15,7 @@ part_types = ['MyObjectBuilder_Wheel', 'MyObjectBuilder_PistonTop', 'MyObjectBui
 types_to_disable = ['MyObjectBuilder_Drill', 'MyObjectBuilder_OreDetector', 'MyObjectBuilder_Projector', 'MyObjectBuilder_TimerBlock', 'MyObjectBuilder_ShipGrinder', 'MyObjectBuilder_ShipWelder']
 
 respawn_ship_names = ['Atmospheric Lander mk.1', 'RespawnShip', 'RespawnShip2']
-default_grid_name_patterns = ['^Atmospheric Lander mk.1$', '^RespawnShip$', '^RespawnShip2$', '^Small Grid [0-9]+$', '^Large Grid [0-9]+$', '^Static Grid [0-9]+$', '^Platform [0-9]+$']
+default_grid_name_patterns = ['^Atmospheric Lander mk.1$', '^RespawnShip$', '^RespawnShip2$', '^Small Grid [0-9]+$', '^Small Ship [0-9]+$', '^Large Grid [0-9]+$', '^Large Ship [0-9]+$', '^Static Grid [0-9]+$', '^Platform [0-9]+$']
 
 entity_xpath_template = './SectorObjects/MyObjectBuilder_EntityBase[@xsi:type="%s"]'
 cubegrid_xpath = entity_xpath_template % 'MyObjectBuilder_CubeGrid'
