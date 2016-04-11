@@ -15,6 +15,7 @@ part_types = ['MyObjectBuilder_Wheel', 'MyObjectBuilder_PistonTop', 'MyObjectBui
 types_to_disable = ['MyObjectBuilder_Drill', 'MyObjectBuilder_OreDetector', 'MyObjectBuilder_Projector', 'MyObjectBuilder_TimerBlock', 'MyObjectBuilder_ShipGrinder', 'MyObjectBuilder_ShipWelder']
 
 respawn_ship_names = ['Atmospheric Lander mk.1', 'RespawnShip', 'RespawnShip2']
+default_grid_name_patterns = ['^Atmospheric Lander mk.1$', '^RespawnShip$', '^RespawnShip2$', '^Small Grid [0-9]+$', '^Large Grid [0-9]+$', '^Static Grid [0-9]+$', '^Platform [0-9]+$']
 
 entity_xpath_template = './SectorObjects/MyObjectBuilder_EntityBase[@xsi:type="%s"]'
 cubegrid_xpath = entity_xpath_template % 'MyObjectBuilder_CubeGrid'
@@ -152,7 +153,7 @@ def get_cubegrids(sbc_tree, sbs_tree):
 
     return cubegrids
 
-def get_cubegrids_to_delete(cubegrids, delete_trash, delete_respawn_ships, are_all_players_deletable, are_all_players_inactive):
+def get_cubegrids_to_delete(cubegrids, delete_trash, delete_respawn_ships, delete_default_names, are_all_players_deletable, are_all_players_inactive):
     to_delete = set()
 
     # delete trash
@@ -171,6 +172,21 @@ def get_cubegrids_to_delete(cubegrids, delete_trash, delete_respawn_ships, are_a
                 continue;
 
             cubegrid.deletion_reasons.append("Trash")
+            to_delete.add(cubegrid)
+
+    # delete ships with default names
+    if delete_default_names:
+        for cubegrid in cubegrids:
+            if cubegrid.part_of_something:
+                continue
+
+            if all((re.match(pattern, cubegrid.name) is None for pattern in default_grid_name_patterns)):
+                continue
+
+            if not are_all_players_deletable(cubegrid.owner_names):
+                continue
+
+            cubegrid.deletion_reasons.append("Default Name")
             to_delete.add(cubegrid)
 
     # delete respawn ships
@@ -317,6 +333,7 @@ def get_argument_parser():
     parser.add_argument('--delete-after-days', type=int, default=30, help="after how many days to delete all grids belonging to the player (0 to never delete)")
     parser.add_argument('--delete-trash', action='store_true', help="whether to delete small grids with no ownable blocks")
     parser.add_argument('--delete-respawn-ships', action='store_true', help="whether to delete respawn ships")
+    parser.add_argument('--delete-default-names', action='store_true', help="whether to delete the grids with default names")
     parser.add_argument('--keep-player-names', nargs='*', type=str, default=[], help="player names whose grids are always kept")
     parser.add_argument('--log-directory', type=str, default='logs/', help=r"the directory containing the .log files (typically, %%APPDATA%%/SpaceEngineersDedicated)")
     parser.add_argument('--sbc-in', type=str, default='Sandbox.sbc', help="the Sandbox.sbc file to be read")
@@ -349,7 +366,7 @@ def run():
     print "Done parsing."
 
     cubegrids = get_cubegrids(sbc_tree, sbs_tree)
-    cubegrids_to_delete = get_cubegrids_to_delete(cubegrids, args.delete_trash, args.delete_respawn_ships, are_all_players_deletable, are_all_players_inactive)
+    cubegrids_to_delete = get_cubegrids_to_delete(cubegrids, args.delete_trash, args.delete_respawn_ships, args.delete_default_names, are_all_players_deletable, are_all_players_inactive)
 
     write_cubegrid_csv(cubegrids, args.csv_directory + '/grids.csv')
     write_cubegrid_csv(cubegrids_to_delete, args.csv_directory + '/grids-delete.csv')
