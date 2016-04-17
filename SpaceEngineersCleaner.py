@@ -45,6 +45,8 @@ reactor_start_xml = '\r\n        <MyObjectBuilder_CubeBlock xsi:type="MyObjectBu
 reactor_end_xml = '\r\n        </MyObjectBuilder_CubeBlock>'
 conveyor_system_enabled_xml = '\r\n          <UseConveyorSystem>true</UseConveyorSystem>';
 conveyor_system_disabled_xml = '\r\n          <UseConveyorSystem>false</UseConveyorSystem>';
+thrust_override_start_xml = '<ThrustOverride>'
+thrust_override_end_xml = '</ThrustOverride>'
 
 class CubeGrid(object):
     def __init__(self, id, name, owner_ids, owner_names, block_count, beacon_count, custom_beacon_names, battery_count, stored_power, reactor_count, reactor_uranium_amount, projector_count, projected_blocks, timer_count, enabled_timer_count, part_of_something, block_types, deletion_reasons=[]):
@@ -306,6 +308,12 @@ def clean_up(file_in, file_out, cubegrids_to_delete, disable_nonessential_blocks
     content = make_replacements(content, reactor_start_xml, reactor_end_xml, \
         lambda text, start_pos, next_pos: text.find(conveyor_system_enabled_xml, start_pos, next_pos) == -1 and text.find(conveyor_system_disabled_xml, start_pos, next_pos) == -1, \
         lambda text, start_pos, next_pos: text[:start_pos] + text[start_pos:next_pos].replace('>\r\n', '>' + conveyor_system_disabled_xml + '\r\n', 1) + text[next_pos:])
+
+    # disable thrust override
+
+    content = make_replacements(content, thrust_override_start_xml, thrust_override_end_xml, \
+        lambda text, start_pos, next_pos: True, \
+        lambda text, start_pos, next_pos: text[:start_pos] + text[next_pos:])
 
     with open(file_out, 'wb') as f:
         f.write(content)
