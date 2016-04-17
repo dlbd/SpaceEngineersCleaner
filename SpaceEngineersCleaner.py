@@ -197,8 +197,7 @@ def get_cubegrids_to_delete(cubegrids, delete_trash, delete_respawn_ships, delet
             if not are_all_players_deletable(cubegrid.owner_names):
                 continue
 
-            grids_default_beacon_names = [beacon_name for beacon_name in cubegrid.custom_beacon_names if beacon_name in default_beacon_names]
-            if cubegrid.beacon_count > 0 or cubegrid.beacon_count != len(grids_default_beacon_names):
+            if not are_all_beacons_with_default_names(cubegrid):
                 continue
 
             cubegrid.deletion_reasons.append("Default Name & No Custom Beacon")
@@ -207,9 +206,14 @@ def get_cubegrids_to_delete(cubegrids, delete_trash, delete_respawn_ships, delet
     # delete respawn ships
     if delete_respawn_ships:
         for cubegrid in cubegrids:
-            if cubegrid.name in respawn_ship_names:
-                cubegrid.deletion_reasons.append("Respawn Ship")
-                to_delete.add(cubegrid)
+            if cubegrid.name not in respawn_ship_names:
+                continue
+
+            if not are_all_beacons_with_default_names(cubegrid):
+                continue
+
+            cubegrid.deletion_reasons.append("Respawn Ship & No Custom Beacon")
+            to_delete.add(cubegrid)
 
     # delete grids of inactive owners, of owners with no med rooms and of owners having only a respawn ship
     for cubegrid in cubegrids:
@@ -340,6 +344,10 @@ def all_players_have_no_powered_medrooms(cubegrids, names):
 
 def all_players_have_only_respawn_ships(cubegrids, names):
     return all((player_has_only_respawn_ship(cubegrids, name) for name in names))
+
+def are_all_beacons_with_default_names(cubegrid):
+    grids_default_beacon_names = [beacon_name for beacon_name in cubegrid.custom_beacon_names if beacon_name in default_beacon_names]
+    return cubegrid.beacon_count == 0 or cubegrid.beacon_count == len(grids_default_beacon_names)
 
 def get_argument_parser():
     parser = argparse.ArgumentParser(description="Space Engineers save file cleaner.")
