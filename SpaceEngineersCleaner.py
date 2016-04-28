@@ -24,6 +24,7 @@ cubegrid_xpath = entity_xpath_template % 'MyObjectBuilder_CubeGrid'
 
 cubeblock_xpath = './CubeBlocks/MyObjectBuilder_CubeBlock'
 cubeblock_xpath_template = cubeblock_xpath + '[@xsi:type="%s"]'
+antenna_xpath= cubeblock_xpath_template % 'MyObjectBuilder_RadioAntenna'
 beacon_xpath = cubeblock_xpath_template % 'MyObjectBuilder_Beacon'
 custom_beacon_name_xpath = beacon_xpath + '/CustomName'
 battery_xpath = cubeblock_xpath_template % 'MyObjectBuilder_BatteryBlock'
@@ -49,12 +50,13 @@ thrust_override_start_xml = '<ThrustOverride>'
 thrust_override_end_xml = '</ThrustOverride>'
 
 class CubeGrid(object):
-    def __init__(self, id, name, owner_ids, owner_names, block_count, beacon_count, custom_beacon_names, battery_count, stored_power, reactor_count, reactor_uranium_amount, projector_count, projected_blocks, timer_count, enabled_timer_count, part_of_something, block_types, deletion_reasons=[]):
+    def __init__(self, id, name, owner_ids, owner_names, block_count, antenna_count, beacon_count, custom_beacon_names, battery_count, stored_power, reactor_count, reactor_uranium_amount, projector_count, projected_blocks, timer_count, enabled_timer_count, part_of_something, block_types, deletion_reasons=[]):
         self.id = id
         self.name = name
         self.owner_ids = owner_ids
         self.owner_names = owner_names
         self.block_count = block_count
+        self.antenna_count = antenna_count
         self.beacon_count = beacon_count
         self.custom_beacon_names = custom_beacon_names
         self.battery_count = battery_count
@@ -139,6 +141,7 @@ def get_cubegrids(sbc_tree, sbs_tree):
         name = entity.findtext('./DisplayName')
 
         all_blocks = entity.findall(cubeblock_xpath, namespaces)
+        antennas = entity.findall(antenna_xpath, namespaces)
         beacons = entity.findall(beacon_xpath, namespaces)
         batteries = entity.findall(battery_xpath, namespaces)
         reactors = entity.findall(reactor_xpath, namespaces)
@@ -162,7 +165,7 @@ def get_cubegrids(sbc_tree, sbs_tree):
 
         cubegrids.append(CubeGrid(\
             id, name, owner_ids, owner_names, len(all_blocks), \
-            len(beacons), custom_beacon_names, \
+            len(antennas), len(beacons), custom_beacon_names, \
             len(batteries), stored_power, len(reactors), reactor_uranium_amount, \
             len(projectors), projected_block_count, \
             len(timers), len(enabled_timers), \
@@ -191,7 +194,7 @@ def get_cubegrids_to_delete(cubegrids, delete_trash, delete_respawn_ships, delet
             cubegrid.deletion_reasons.append("Trash")
             to_delete.add(cubegrid)
 
-    # delete ships with default names, except those with beacons
+    # delete ships with default names, except those with antennas and beacons
     if delete_default_names:
         for cubegrid in cubegrids:
             if cubegrid.part_of_something:
@@ -201,6 +204,9 @@ def get_cubegrids_to_delete(cubegrids, delete_trash, delete_respawn_ships, delet
                 continue
 
             if not are_all_players_deletable(cubegrid.owner_names):
+                continue
+
+            if cubegrid.antenna_count > 0:
                 continue
 
             if are_some_beacons_with_nondefault_names(cubegrid):
@@ -444,13 +450,14 @@ def write_cubegrid_csv(cubegrids, filename):
     with open(filename, 'wb') as csvfile:
         writer = csv.writer(csvfile, delimiter=get_delimiter())
         
-        writer.writerow(['Name', 'Owners', 'Blocks', 'Beacons', 'Custom Beacon Names', 'Batteries', 'Stored Power', 'Reactors', 'Reactor Uranium Amount', 'Projectors', 'Projected Blocks', 'Timers', 'Enabled Timers', 'Block Types', 'Deletion Reasons'])
+        writer.writerow(['Name', 'Owners', 'Blocks', 'Antennas', 'Beacons', 'Custom Beacon Names', 'Batteries', 'Stored Power', 'Reactors', 'Reactor Uranium Amount', 'Projectors', 'Projected Blocks', 'Timers', 'Enabled Timers', 'Block Types', 'Deletion Reasons'])
 
         for grid in cubegrids:
             writer.writerow([
                 grid.name.encode('utf-8'),
                 ', '.join([name.encode('utf-8') for name in grid.owner_names]),
                 grid.block_count,
+                grid.antenna_count,
                 grid.beacon_count,
                 ', '.join([name.encode('utf-8') for name in grid.custom_beacon_names]),
                 grid.battery_count,
